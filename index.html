@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chatbot Interface</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .glass-effect {
+            backdrop-filter: blur(16px) saturate(180%);
+            background-color: rgba(17, 25, 40, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .typing-animation::after {
+            content: '...';
+            animation: typing 1.5s infinite;
+        }
+        @keyframes typing {
+            0% { content: ''; }
+            25% { content: '.'; }
+            50% { content: '..'; }
+            75% { content: '...'; }
+        }
+        .message-content img {
+            max-width: 100%;
+            border-radius: 0.5rem;
+            margin: 0.5rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="min-h-screen text-gray-100 p-4">
+        <div class="max-w-6xl mx-auto">
+            <nav class="flex justify-between items-center mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-3 h-3 bg-cyan-400 rounded-full animate-pulse"></div>
+                    <h1 class="text-2xl font-bold text-cyan-400">NeuroBrain AI</h1>
+                </div>
+                <div class="flex gap-4">
+                    <button @click="toggleTheme" class="p-2 rounded-lg bg-slate-700 hover:bg-slate-600">
+                        <i class="bi" :class="isDark ? 'bi-sun' : 'bi-moon'"></i>
+                    </button>
+                    <button @click="toggleView" 
+                            class="px-4 py-2 bg-cyan-600 rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2">
+                        <i class="bi" :class="showChat ? 'bi-folder' : 'bi-chat'"></i>
+                        {{ showChat ? 'View Documents' : 'Return to Chat' }}
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Chat Interface -->
+            <div v-if="showChat" class="glass-effect rounded-xl p-4">
+                <div class="chat-container h-[60vh] overflow-y-auto mb-4 p-4">
+                    <div v-for="(message, index) in messages" :key="index" 
+                         :class="message.type === 'user' ? 'ml-auto bg-cyan-600' : 'mr-auto bg-slate-700'"
+                         class="max-w-[80%] mb-4 p-3 rounded-lg shadow-lg">
+                        <div class="message-content" v-html="message.text"></div>
+                        <div v-if="message.type === 'ai'" class="text-xs text-gray-400 mt-2">
+                            Sources: {{ message.sources?.join(', ') || 'AI Knowledge Base' }}
+                        </div>
+                    </div>
+                    <div v-if="isTyping" class="mr-auto bg-slate-700 max-w-[80%] mb-4 p-3 rounded-lg">
+                        <span class="typing-animation">AI is thinking</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-4 items-center">
+                    <div class="flex-1 relative">
+                        <textarea v-model="userInput" 
+                                 @keyup.enter.exact="sendMessage"
+                                 placeholder="Type your message..." 
+                                 rows="1"
+                                 class="w-full bg-slate-800 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"></textarea>
+                    </div>
+                    <button @click="sendMessage" 
+                            class="bg-cyan-500 p-3 rounded-lg hover:bg-cyan-600 transition-colors disabled:opacity-50"
+                            :disabled="isTyping">
+                        <i class="bi bi-send"></i>
+                    </button>
+                </div>
+
+                <div class="mt-6">
+                    <div class="flex items-center gap-4">
+                        <label class="flex-1">
+                            <input type="file" @change="handleFileUpload" multiple accept=".txt,.pdf,.doc,.docx" 
+                                   class="block w-full text-sm text-slate-300
+                                   file:mr-4 file:py-2 file:px-4
+                                   file:rounded-full file:border-0
+                                   file:text-sm file:font-semibold
+                                   file:bg-cyan-600 file:text-white
+                                   hover:file:bg-cyan-700">
+                        </label>
+                        <button @click="uploadFiles" 
+                                class="bg-cyan-600 px-4 py-2 rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2">
+                            <i class="bi bi-cloud-upload"></i>
+                            Upload
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Documents View -->
+            <div v-else class="glass-effect rounded-xl p-6">
+                <h2 class="text-xl font-bold mb-6 text-cyan-400 flex items-center gap-2">
+                    <i class="bi bi-files"></i>
+                    Knowledge Base Documents
+                </h2>
+                <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    <div v-for="(doc, index) in documents" :key="index" 
+                         class="bg-slate-800 p-4 rounded-lg hover:bg-slate-700 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i class="bi bi-file-text text-2xl text-cyan-400"></i>
+                                <div>
+                                    <div class="font-medium">{{ doc.name }}</div>
+                                    <div class="text-sm text-gray-400">{{ doc.size }} KB</div>
+                                </div>
+                            </div>
+                            <button @click="removeDocument(index)" 
+                                    class="text-red-400 hover:text-red-500 p-2">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                        <div class="mt-2 text-sm text-gray-400">
+                            Uploaded {{ new Date().toLocaleDateString() }}
+                        </div>
+                    </div>
+                </div>
+                <div v-if="documents.length === 0" 
+                     class="text-center text-gray-400 py-16 flex flex-col items-center gap-4">
+                    <i class="bi bi-inbox text-6xl"></i>
+                    <div>No documents uploaded yet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue
+
+        createApp({
+            data() {
+                return {
+                    showChat: true,
+                    userInput: '',
+                    messages: [],
+                    documents: [],
+                    selectedFiles: [],
+                    isTyping: false,
+                    isDark: true
+                }
+            },
+            methods: {
+                async sendMessage(event) {
+                    if (event.type === 'keyup' && event.shiftKey) return
+                    if (!this.userInput.trim()) return
+                    event.preventDefault()
+
+                    const userMessage = this.userInput.trim()
+                    this.messages.push({
+                        text: marked.parse(userMessage),
+                        type: 'user'
+                    })
+                    this.userInput = ''
+                    this.isTyping = true
+
+                    // Simulate AI processing with document context
+                    setTimeout(() => {
+                        const response = this.generateResponse(userMessage)
+                        this.messages.push({
+                            text: marked.parse(response.text),
+                            type: 'ai',
+                            sources: response.sources
+                        })
+                        this.isTyping = false
+                        this.scrollToBottom()
+                    }, 2000)
+
+                    this.scrollToBottom()
+                },
+                generateResponse(message) {
+                    // Simulate AI processing with document context
+                    let response = {
+                        text: '',
+                        sources: []
+                    }
+
+                    if (this.documents.length > 0) {
+                        response.text = "Based on the documents you've provided, I can help answer your question about " + 
+                                      message + ". The relevant information can be found in the following documents: " +
+                                      this.documents.slice(0, 2).map(d => d.name).join(', ') + ".\n\n" +
+                                      "Here's what I found:\n\n" +
+                                      "1. The main points related to your query...\n" +
+                                      "2. Additional context from the documents...\n" +
+                                      "3. Relevant examples and citations..."
+                        response.sources = this.documents.slice(0, 2).map(d => d.name)
+                    } else {
+                        response.text = "I'm operating from my base knowledge. To provide more specific and accurate answers, " +
+                                      "consider uploading relevant documents to train me with context.\n\n" +
+                                      "Based on what I know:\n\n" +
+                                      "1. General information about " + message + "\n" +
+                                      "2. Common perspectives and approaches\n" +
+                                      "3. Best practices and recommendations"
+                    }
+
+                    return response
+                },
+                scrollToBottom() {
+                    setTimeout(() => {
+                        const container = document.querySelector('.chat-container')
+                        container.scrollTop = container.scrollHeight
+                    }, 100)
+                },
+                handleFileUpload(event) {
+                    this.selectedFiles = Array.from(event.target.files)
+                },
+                uploadFiles() {
+                    if (this.selectedFiles.length === 0) return
+
+                    this.selectedFiles.forEach(file => {
+                        this.documents.push({
+                            name: file.name,
+                            size: Math.round(file.size / 1024)
+                        })
+                    })
+
+                    this.selectedFiles = []
+                    const fileInput = document.querySelector('input[type="file"]')
+                    if (fileInput) fileInput.value = ''
+
+                    // Acknowledge upload in chat
+                    this.messages.push({
+                        text: `Successfully uploaded ${this.selectedFiles.length} document(s). I'm now processing them to enhance my knowledge base.`,
+                        type: 'ai'
+                    })
+                },
+                removeDocument(index) {
+                    this.documents.splice(index, 1)
+                },
+                toggleView() {
+                    this.showChat = !this.showChat
+                },
+                toggleTheme() {
+                    this.isDark = !this.isDark
+                    document.body.style.background = this.isDark ? 
+                        'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)' : 
+                        'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)'
+                }
+            }
+        }).mount('#app')
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
